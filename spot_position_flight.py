@@ -146,13 +146,15 @@ class Spot_Position_Flight(Flight):
         
         ao_diff = np.diff(self.ao)
         
-        ao_d_upper_bound = 12.5
+        ao_d_upper_bound = 5
         ao_d_lower_bound = -5
         
         tr_start = self.samples[np.where(ao_diff > ao_d_upper_bound)]
         start_diff = np.diff(tr_start)
         redundant_starts = tr_start[np.where(start_diff < 1000)]
-        clean_tr_starts = np.setdiff1d(tr_start,redundant_starts)+1
+        clean_tr_start_candidates = np.setdiff1d(tr_start,redundant_starts)+1
+        clean_tr_starts = clean_tr_start_candidates[np.where(self.ao[clean_tr_start_candidates+50] > 3)]
+        
         
         tr_stop = self.samples[np.where(ao_diff < ao_d_lower_bound)]
         stop_diff = np.diff(tr_stop)
@@ -224,7 +226,7 @@ class Spot_Position_Flight(Flight):
         self.stim_types_labels = stim_types_labels
            
    
-    def plot_wba_by_cnd(self,title_txt='',wba_lim=[-1,1],if_save=True): 
+    def plot_wba_by_cnd(self,title_txt='',wba_lim=[-1.5,1.5],if_save=True): 
         # plot the first 30 trials (types 1 and 2) separately in the first row
         # then plot the four conditions in rows two and three
         
@@ -240,7 +242,7 @@ class Spot_Position_Flight(Flight):
         n_rows = 3
         n_cols = 2 
         
-        fig = plt.figure(figsize=(17.5,9))       #(16.5, 9))
+        fig = plt.figure(figsize=(9.5,11.5))       #(16.5, 9))
         gs = gridspec.GridSpec(n_rows*2,n_cols,height_ratios=[1,.3,1,.3,1,.3])
         gs.update(wspace=0.1, hspace=0.2) # set the spacing between axes. 
         
@@ -292,14 +294,24 @@ class Spot_Position_Flight(Flight):
                     wba_trace = wba_trace - baseline  
          
                     wba_ax.plot(wba_trace[::10],color=this_color)
-                    wba_ax.axhline()
-                    
-                
+                   
                     #now plot stimulus traces ____________________________________________
                     stim_ax.plot(all_fly_traces.loc[::10,('this_fly',tr,cnd,'xstim')],color=this_color)
                     
                     # also plot ao levels as a sanity check
                     stim_ax.plot(all_fly_traces.loc[::10,('this_fly',tr,cnd,'ao')],color=blue)
+                
+                
+                # now plot the condition mean ____________________________________________
+                mean_wba_trace = np.nanmean(all_fly_traces.loc[:,('this_fly',this_cnd_trs,cnd,'lmr')],1)
+                baseline = np.nanmean(mean_wba_trace[baseline_win])
+                mean_wba_trace = mean_wba_trace - baseline  
+                wba_ax.plot(mean_wba_trace[::10],color=black,linewidth=3)
+                
+                wba_ax.axhline()
+                            
+        
+        
                             
         # now format all subplots _____________________________________________________  
    
@@ -352,15 +364,13 @@ class Spot_Position_Flight(Flight):
                 #fig.text(.1,.95,'Left visual field, moving left',fontsize=16)
                 #fig.text(.75,.95,'Right visual field, moving right',fontsize=16)
             
-                fig.text(.015,.87,'Trials 1-15',fontsize=16)
-                fig.text(.015,.6,'Trials 16-end',fontsize=16)
+                fig.text(.01,.87,'Trials 1-15',fontsize=14)
+                fig.text(.01,.6,'Trials 16-end',fontsize=14)
                 #fig.text(.065,.33,'Spot',fontsize=16)
     
                 figure_txt = title_txt
-                fig.text(.35,.95,figure_txt,fontsize=18) 
+                fig.text(.2,.95,figure_txt,fontsize=18) 
     
-                #fig.text(.05,.95,tr_info_str,fontsize=14) 
-           
            
                 plt.draw()
     
@@ -566,26 +576,33 @@ def get_pop_traces_df(path_name, population_f_names):
     #just collect these for all flies
     
     #genotypes must be sorted to the labels for columns 
-    genotypes = (pd.unique(population_f_names.values[:,1]))
+    genotypes = (pd.unique(population_f_names.loc[:,'genotype']))
     genotypes = np.sort(genotypes)
-    genotypes = genotypes[1:]
     print genotypes
     
     population_df = pd.DataFrame()
     
+    
+    #mean_wba_trace = np.nanmean(all_fly_traces.loc[:,('this_fly',this_cnd_trs,cnd,'lmr')],1)
+    #baseline = np.nanmean(mean_wba_trace[baseline_win])
+    #mean_wba_trace = mean_wba_trace - baseline  
+    
     #loop through each genotype  
     for g in genotypes:
-        g
+        print g
         these_genotype_indicies = np.where(population_f_names.values[:,1] == g)[0]
     
-        for index in these_genotype_indicies:
+        for index in these_genotype_indicies[0:1]:
             print index
         
-            fly = Looming_Behavior(path_name + population_f_names.values[index,0])
+            fly = Spot_Position_Flight(path_name + population_f_names.values[index,0])
             fly.process_fly()
-            fly_df = fly.get_traces_by_stim(g)
+            fly_df, saccades_df = fly.get_traces_by_stim(g+' __ '+str(index))
             population_df = pd.concat([population_df,fly_df],axis=1)
     return population_df
+     
+     
+     
      
 def plot_pop_flight_behavior_histograms(population_df, wba_lim=[-3,3],cnds_to_plot=range(9)):  
     #for the looming data, plot histograms over time of all left-right
